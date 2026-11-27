@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Namma Shopping Diary</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 :root{
   --green:#1f8a5b;
@@ -338,6 +339,24 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
   .report-item strong{font-size:18px}
   .login-card{padding:28px 20px}
 }
+
+.sync-chip{
+  display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:750;
+  padding:7px 11px;border-radius:10px;background:#f2f6f4;color:var(--ink-soft);border:1px solid var(--line);
+}
+.sync-dot{width:8px;height:8px;border-radius:50%;background:#96a89e}
+.sync-chip.online{background:var(--mint);color:var(--deep);border-color:#bfe3cf}
+.sync-chip.online .sync-dot{background:var(--green)}
+.sync-chip.syncing{background:var(--amber-bg);color:var(--amber);border-color:#f4dcb0}
+.sync-chip.syncing .sync-dot{background:var(--amber)}
+.sync-chip.error{background:var(--red-bg);color:var(--red);border-color:#f3cccc}
+.sync-chip.error .sync-dot{background:var(--red)}
+.sql-box{
+  background:#13251c;color:#d6f5e5;padding:12px 14px;border-radius:12px;
+  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;
+  line-height:1.5;overflow-x:auto;white-space:pre;margin-top:10px;user-select:all;
+}
+
 </style>
 </head>
 <body>
@@ -365,7 +384,7 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
     <div class="field"><label for="username" data-i18n="yourName">Your name</label><input id="username" placeholder="Enter your name" autocomplete="username"></div>
     <div class="field"><label for="password" data-i18n="password">PIN / Password</label><input id="password" type="password" placeholder="Enter any PIN or password" autocomplete="current-password"></div>
     <button class="primary full" id="loginSubmitBtn" type="submit" data-i18n="loginBtn">Unlock Diary →</button>
-    <p class="hint" data-i18n="loginHint">Personal shopping tracker · Auto-locks when idle</p>
+    <p class="hint" data-i18n="loginHint">Secured with SHA-256 + Salt · Syncs with Supabase when connected</p>
   </form>
 </section>
 
@@ -390,6 +409,7 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
       <span>Namma Shopping Diary</span>
     </div>
     <div class="top-actions">
+      <span class="sync-chip" id="syncChip" title="Cloud Sync Status"><span class="sync-dot"></span><span id="syncText">Local</span></span>
       <span class="date-chip" id="todayChip"></span>
       <button type="button" class="lang-btn" id="langToggle" title="Switch Language">தமிழ் / EN</button>
       <button type="button" class="logout" id="logoutBtn" data-i18n="logout">Lock</button>
@@ -606,6 +626,7 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
       <!-- SETTINGS PAGE -->
       <section id="page-settings" class="page hidden">
         <div class="page-header"><div><h2 data-i18n="setTitle">Settings ⚙️</h2><p data-i18n="setSub">Personalise your shopping diary.</p></div></div>
+
         <div class="panel">
           <h3 data-i18n="profileTitle" style="margin-bottom:12px">Profile & Safeguards</h3>
           <div class="field" style="max-width:420px"><label for="profileName" data-i18n="yourName">Your name</label><input id="profileName"></div>
@@ -627,6 +648,64 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
           </div>
           <button type="button" class="primary" id="saveProfile" data-i18n="btnSaveName" style="margin-top:6px">Save preferences</button>
         </div>
+
+        <!-- Secure Password Update (SHA-256 + Salt + Supabase Sync) -->
+        <div class="panel">
+          <div class="panel-head">
+            <h3 data-i18n="secPassTitle">🔐 Change Password / PIN</h3>
+            <span class="muted">SHA-256 Salted Hash · Updates Supabase immediately</span>
+          </div>
+          <div class="field" style="max-width:420px"><label for="currentPassInput" data-i18n="lblCurrPass">Current Password / PIN</label><input id="currentPassInput" type="password" placeholder="Enter current password" autocomplete="current-password"></div>
+          <div class="field" style="max-width:420px"><label for="newPassInput" data-i18n="lblNewPass">New Password / PIN</label><input id="newPassInput" type="password" placeholder="Minimum 4 characters" autocomplete="new-password"></div>
+          <div class="field" style="max-width:420px"><label for="confirmPassInput" data-i18n="lblConfPass">Confirm New Password / PIN</label><input id="confirmPassInput" type="password" placeholder="Re-enter new password" autocomplete="new-password"></div>
+          <button type="button" class="primary" id="updatePasswordBtn" data-i18n="btnUpdatePass" style="margin-top:6px">Update Password</button>
+        </div>
+
+        <!-- Supabase Cloud Sync Configuration -->
+        <div class="panel">
+          <div class="panel-head">
+            <h3 data-i18n="sbTitle">☁️ Supabase Cloud Sync</h3>
+            <span class="muted" id="sbConnStatus">Not connected</span>
+          </div>
+          <p class="muted" style="margin-top:0">Connect your Supabase project to sync shopping bills, checklist, and salted password hash across devices.</p>
+          <div class="field" style="max-width:520px"><label for="sbUrlInput">Supabase Project URL</label><input id="sbUrlInput" placeholder="https://xyzcompany.supabase.co" autocomplete="off"></div>
+          <div class="field" style="max-width:520px"><label for="sbKeyInput">Supabase Anon Public Key</label><input id="sbKeyInput" type="password" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." autocomplete="off"></div>
+          <div class="toolbar" style="margin-top:10px">
+            <button type="button" class="primary" id="saveSupabaseBtn">Connect & Sync Now</button>
+            <button type="button" class="secondary" id="pullSupabaseBtn">Pull from Cloud</button>
+            <button type="button" class="secondary" id="toggleSqlBtn">Show SQL Table Setup</button>
+          </div>
+          <div id="sbSqlBox" class="sql-box hidden">-- Run once in Supabase SQL Editor (Date-wise rows):
+create table if not exists shopping_profiles (
+  profile_key text primary key,
+  user_name text not null,
+  password_hash text not null,
+  salt text not null,
+  checklist_json jsonb not null default '[]'::jsonb,
+  monthly_budget numeric not null default 0,
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists shopping_diary_days (
+  id text primary key,
+  profile_key text not null,
+  shop_date date not null,
+  payment_mode text not null default 'Cash',
+  shop_name text not null default '',
+  items_json jsonb not null default '[]'::jsonb,
+  total_amount numeric not null default 0,
+  total_weight_kg numeric not null default 0,
+  receipt_image text,
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists idx_diary_days_profile_date on shopping_diary_days(profile_key, shop_date desc);
+alter table shopping_profiles enable row level security;
+alter table shopping_diary_days enable row level security;
+create policy "Allow anon profiles" on shopping_profiles for all using (true) with check (true);
+create policy "Allow anon diary days" on shopping_diary_days for all using (true) with check (true);</div>
+        </div>
+
         <div class="panel">
           <h3 data-i18n="dataTitle" style="margin-bottom:6px">Data & Backup</h3>
           <p class="muted" data-i18n="dataDesc">Your shopping entries are saved in this browser on this device. Export a JSON backup or restore an earlier backup file anytime.</p>
@@ -907,8 +986,10 @@ function loadChecklist() {
   }
 }
 
-function persist() {
+function persist(dateKey = currentDate, immediate = false) {
   localStorage.setItem(STORE, JSON.stringify(data));
+  if (dateKey) dirtyDates.add(dateKey);
+  syncToSupabase(immediate, false);
 }
 
 function dayItems(date = currentDate) {
@@ -1022,25 +1103,78 @@ function showApp() {
   resetIdleTimer();
 }
 
-function handleLogin(e) {
+async function handleLogin(e) {
   if (e) e.preventDefault();
   const enteredName = $('username').value.trim();
-  const enteredPass = $('password').value.trim();
+  const enteredPass = $('password').value;
   if (!enteredName) {
     toast('Please enter your name.');
     $('username').focus();
     return;
   }
-  if (!enteredPass) {
-    toast('Please enter a PIN or password.');
+  if (!enteredPass || enteredPass.length < 4) {
+    toast('Enter a password/PIN (min 4 characters).');
     $('password').focus();
     return;
   }
-  userName = enteredName;
-  isLoggedIn = true;
-  localStorage.setItem('nsd_name', userName);
-  localStorage.setItem('nsd_logged_in', '1');
-  showApp();
+
+  const btn = $('loginSubmitBtn');
+  btn.disabled = true;
+
+  try {
+    // 1. If Supabase is connected, check if profile exists in cloud first
+    if (sbClient) {
+      const bundle = await fetchRemoteProfileAndDays(enteredName);
+      if (bundle && bundle.profile && bundle.profile.password_hash && bundle.profile.salt) {
+        const computed = await hashPasswordWithSalt(enteredPass, bundle.profile.salt);
+        if (computed !== bundle.profile.password_hash) {
+          toast('Incorrect password for this profile.');
+          $('password').focus();
+          return;
+        }
+        userName = bundle.profile.user_name || enteredName;
+        applyRemoteBundle(bundle);
+        isLoggedIn = true;
+        localStorage.setItem('nsd_name', userName);
+        localStorage.setItem('nsd_logged_in', '1');
+        showApp();
+        setSyncStatus('online', 'Synced');
+        return;
+      }
+    }
+
+    // 2. Check local salted hash if same user already exists locally
+    const savedName = localStorage.getItem('nsd_name') || '';
+    const savedHash = localStorage.getItem(AUTH_HASH_KEY);
+    const savedSalt = localStorage.getItem(AUTH_SALT_KEY);
+
+    if (savedHash && savedSalt && profileKeyFromName(savedName) === profileKeyFromName(enteredName)) {
+      const computed = await hashPasswordWithSalt(enteredPass, savedSalt);
+      if (computed !== savedHash) {
+        toast('Incorrect password!');
+        $('password').focus();
+        return;
+      }
+    } else {
+      // First-time setup: hash & salt the new password
+      const newSalt = generateSaltHex(16);
+      const newHash = await hashPasswordWithSalt(enteredPass, newSalt);
+      localStorage.setItem(AUTH_SALT_KEY, newSalt);
+      localStorage.setItem(AUTH_HASH_KEY, newHash);
+    }
+
+    userName = enteredName;
+    isLoggedIn = true;
+    localStorage.setItem('nsd_name', userName);
+    localStorage.setItem('nsd_logged_in', '1');
+    showApp();
+    if (sbClient) syncToSupabase(true, true);
+  } catch (err) {
+    console.error('Login error:', err);
+    toast('Login check failed. Check your connection.');
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 $('loginForm').addEventListener('submit', handleLogin);
@@ -1427,13 +1561,13 @@ $('todayTable').addEventListener('click', e => {
   const targetDate = currentDate;
   data.days[targetDate].splice(i, 1);
   if (!data.days[targetDate].length) delete data.days[targetDate];
-  persist();
+  persist(targetDate, true);
   renderNew();
   toast(`Removed "${removedItem.name}"`, () => {
     if (!data.days[targetDate]) data.days[targetDate] = [];
     const insertAt = Math.min(i, data.days[targetDate].length);
     data.days[targetDate].splice(insertAt, 0, removedItem);
-    persist();
+    persist(targetDate, true);
     if (currentDate === targetDate) renderNew();
     toast(`Restored "${removedItem.name}"!`);
   });
@@ -1569,7 +1703,25 @@ $('historyList').addEventListener('click', e => {
     return;
   }
   const body = tableHTML(items, false);
-  w.document.write(`<!doctype html><html><head><title>Shopping ${date}</title><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{font-family:Arial,sans-serif;padding:24px;color:#182b22}h2{color:#1f8a5b}table{width:100%;border-collapse:collapse}td,th{padding:12px;border-bottom:1px solid #ddd;text-align:left}.num{text-align:right}.total-row{font-weight:bold}</style></head><body><h2>🥬 Namma Shopping Diary</h2><h3>${prettyDate(date)}${shop ? ' · ' + escapeHTML(shop) : ''}</h3>${body}</body></html>`);
+  w.document.write(`<!doctype html><html><head><title>Shopping ${date}</title><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{font-family:Arial,sans-serif;padding:24px;color:#182b22}h2{color:#1f8a5b}table{width:100%;border-collapse:collapse}td,th{padding:12px;border-bottom:1px solid #ddd;text-align:left}.num{text-align:right}.total-row{font-weight:bold}
+.sync-chip{
+  display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:750;
+  padding:7px 11px;border-radius:10px;background:#f2f6f4;color:var(--ink-soft);border:1px solid var(--line);
+}
+.sync-dot{width:8px;height:8px;border-radius:50%;background:#96a89e}
+.sync-chip.online{background:var(--mint);color:var(--deep);border-color:#bfe3cf}
+.sync-chip.online .sync-dot{background:var(--green)}
+.sync-chip.syncing{background:var(--amber-bg);color:var(--amber);border-color:#f4dcb0}
+.sync-chip.syncing .sync-dot{background:var(--amber)}
+.sync-chip.error{background:var(--red-bg);color:var(--red);border-color:#f3cccc}
+.sync-chip.error .sync-dot{background:var(--red)}
+.sql-box{
+  background:#13251c;color:#d6f5e5;padding:12px 14px;border-radius:12px;
+  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;
+  line-height:1.5;overflow-x:auto;white-space:pre;margin-top:10px;user-select:all;
+}
+
+</style></head><body><h2>🥬 Namma Shopping Diary</h2><h3>${prettyDate(date)}${shop ? ' · ' + escapeHTML(shop) : ''}</h3>${body}</body></html>`);
   w.document.close();
 });
 
@@ -1695,6 +1847,7 @@ $('exportCsvBtn').addEventListener('click', () => {
 function saveChecklist() {
   localStorage.setItem('nsd_checklist', JSON.stringify(checklist));
   renderChecklist();
+  syncToSupabase(false);
 }
 
 function renderChecklist() {
@@ -1864,7 +2017,25 @@ function printBill(date) {
     </tr>
   `).join('');
 
-  const html = `<!doctype html><html><head><meta charset="utf-8"><title>Namma Shopping Bill - ${date}</title><style>body{font-family:Arial,sans-serif;color:#182b22;padding:28px;max-width:760px;margin:auto}h1{color:#1f8a5b;margin-bottom:4px}.sub{color:#6d8076;margin-top:0}table{width:100%;border-collapse:collapse;margin-top:24px}th,td{padding:12px 10px;border-bottom:1px solid #e2ece6;text-align:left}th{background:#e8f6ef}.right{text-align:right}.total{font-weight:bold;font-size:18px}.foot{margin-top:30px;color:#6d8076;font-size:12px}@media print{body{padding:0}}</style></head><body><h1>🥬 Namma Shopping Diary</h1><p class="sub">Personal shopping bill · ${prettyDate(date)} · Paid via ${escapeHTML(dayPaymentMode(date))}${shop ? ' · ' + escapeHTML(shop) : ''}</p><table><thead><tr><th>S.No</th><th>Veg / Item</th><th>Qty</th><th class="right">Rate</th><th class="right">Amt</th></tr></thead><tbody>${rows}<tr class="total"><td colspan="4">TOTAL</td><td class="right">${money(dayTotal(items))}</td></tr></tbody></table><p class="foot">Thank you for using Namma Shopping Diary.</p><script>window.onload=()=>setTimeout(()=>window.print(),250)<\/script></body></html>`;
+  const html = `<!doctype html><html><head><meta charset="utf-8"><title>Namma Shopping Bill - ${date}</title><style>body{font-family:Arial,sans-serif;color:#182b22;padding:28px;max-width:760px;margin:auto}h1{color:#1f8a5b;margin-bottom:4px}.sub{color:#6d8076;margin-top:0}table{width:100%;border-collapse:collapse;margin-top:24px}th,td{padding:12px 10px;border-bottom:1px solid #e2ece6;text-align:left}th{background:#e8f6ef}.right{text-align:right}.total{font-weight:bold;font-size:18px}.foot{margin-top:30px;color:#6d8076;font-size:12px}@media print{body{padding:0}}
+.sync-chip{
+  display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:750;
+  padding:7px 11px;border-radius:10px;background:#f2f6f4;color:var(--ink-soft);border:1px solid var(--line);
+}
+.sync-dot{width:8px;height:8px;border-radius:50%;background:#96a89e}
+.sync-chip.online{background:var(--mint);color:var(--deep);border-color:#bfe3cf}
+.sync-chip.online .sync-dot{background:var(--green)}
+.sync-chip.syncing{background:var(--amber-bg);color:var(--amber);border-color:#f4dcb0}
+.sync-chip.syncing .sync-dot{background:var(--amber)}
+.sync-chip.error{background:var(--red-bg);color:var(--red);border-color:#f3cccc}
+.sync-chip.error .sync-dot{background:var(--red)}
+.sql-box{
+  background:#13251c;color:#d6f5e5;padding:12px 14px;border-radius:12px;
+  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;
+  line-height:1.5;overflow-x:auto;white-space:pre;margin-top:10px;user-select:all;
+}
+
+</style></head><body><h1>🥬 Namma Shopping Diary</h1><p class="sub">Personal shopping bill · ${prettyDate(date)} · Paid via ${escapeHTML(dayPaymentMode(date))}${shop ? ' · ' + escapeHTML(shop) : ''}</p><table><thead><tr><th>S.No</th><th>Veg / Item</th><th>Qty</th><th class="right">Rate</th><th class="right">Amt</th></tr></thead><tbody>${rows}<tr class="total"><td colspan="4">TOTAL</td><td class="right">${money(dayTotal(items))}</td></tr></tbody></table><p class="foot">Thank you for using Namma Shopping Diary.</p><script>window.onload=()=>setTimeout(()=>window.print(),250)<\/script></body></html>`;
   const w = window.open('', '_blank');
   if (!w) {
     toast('Allow pop-ups to create your PDF bill.');
@@ -1898,6 +2069,7 @@ $('saveProfile').addEventListener('click', () => {
   applyLanguage();
   renderNew();
   resetIdleTimer();
+  syncToSupabase(true);
   toast('Preferences saved!');
 });
 
@@ -1943,6 +2115,7 @@ $('importFileInput').addEventListener('change', e => {
         $('profileName').value = userName;
       }
       persist();
+      if (sbClient) syncToSupabase(true, true);
       renderNew();
       renderHistory();
       renderReport();
@@ -2073,17 +2246,369 @@ $('removeReceiptBtn').addEventListener('click', () => {
   if (isDateLocked(currentDate)) return;
   if (data.meta && data.meta[currentDate]) {
     delete data.meta[currentDate].receipt;
-    persist();
+    persist(currentDate, true);
     renderReceiptBox();
     toast('Bill photo removed.');
   }
 });
 
+
+// ================= CRYPTO (SHA-256 + SALT) & DATE-WISE SUPABASE SYNC =================
+// 👇 Paste your Supabase URL & Anon Key here once so you never have to re-enter them:
+const DEFAULT_SB_URL = 'https://vcigvxhzrslcllaouauv.supabase.co';
+const DEFAULT_SB_ANON_KEY = 'sb_publishable_vrwMGBS8HeK2uQUNKxi52g_OO7jCK3m';
+
+const SB_URL_KEY = 'nsd_sb_url';
+const SB_ANON_KEY = 'nsd_sb_anon';
+const AUTH_HASH_KEY = 'nsd_pass_hash';
+const AUTH_SALT_KEY = 'nsd_pass_salt';
+
+let sbClient = null;
+let syncDebounce = null;
+let dirtyDates = new Set();
+
+function setSyncStatus(state, label) {
+  const chip = $('syncChip');
+  const txt = $('syncText');
+  if (!chip || !txt) return;
+  chip.className = 'sync-chip' + (state ? ' ' + state : '');
+  txt.textContent = label;
+}
+
+function profileKeyFromName(name) {
+  return name.trim().toLowerCase().replace(/\s+/g, '_');
+}
+
+function generateSaltHex(bytes = 16) {
+  const arr = new Uint8Array(bytes);
+  crypto.getRandomValues(arr);
+  return Array.from(arr, b => b.toString(16).padStart(2, '0')).join('');
+}
+
+async function hashPasswordWithSalt(password, saltHex) {
+  const enc = new TextEncoder();
+  const raw = enc.encode(`${saltHex}:${password}`);
+  const digest = await crypto.subtle.digest('SHA-256', raw);
+  return Array.from(new Uint8Array(digest), b => b.toString(16).padStart(2, '0')).join('');
+}
+
+function initSupabaseClient() {
+  const url = (localStorage.getItem(SB_URL_KEY) || DEFAULT_SB_URL || '').trim();
+  const key = (localStorage.getItem(SB_ANON_KEY) || DEFAULT_SB_ANON_KEY || '').trim();
+  if ($('sbUrlInput')) $('sbUrlInput').value = url;
+  if ($('sbKeyInput')) $('sbKeyInput').value = key;
+
+  if (!url || !key || !window.supabase) {
+    sbClient = null;
+    setSyncStatus('', 'Local');
+    if ($('sbConnStatus')) $('sbConnStatus').textContent = 'Not connected';
+    return null;
+  }
+  try {
+    sbClient = window.supabase.createClient(url, key);
+    setSyncStatus('online', 'Cloud Ready');
+    if ($('sbConnStatus')) $('sbConnStatus').textContent = 'Connected ✅';
+    return sbClient;
+  } catch {
+    sbClient = null;
+    setSyncStatus('error', 'Config Error');
+    return null;
+  }
+}
+
+function buildDayRowPayload(pKey, date) {
+  const items = data.days[date] || [];
+  const meta = (data.meta && data.meta[date]) || {};
+  return {
+    id: `${pKey}__${date}`,
+    profile_key: pKey,
+    shop_date: date,
+    payment_mode: meta.payment || 'Cash',
+    shop_name: meta.shop || '',
+    items_json: items,
+    total_amount: Number(dayTotal(items).toFixed(2)),
+    total_weight_kg: Number(dayTotalKg(items).toFixed(3)),
+    receipt_image: meta.receipt || null,
+    updated_at: new Date().toISOString()
+  };
+}
+
+async function syncDateRowToSupabase(date) {
+  if (!sbClient || !userName || !date) return;
+  const pKey = profileKeyFromName(userName);
+  const items = data.days[date] || [];
+  const meta = (data.meta && data.meta[date]) || {};
+  const hasAnything = items.length > 0 || Boolean(meta.shop) || Boolean(meta.receipt);
+
+  if (!hasAnything) {
+    const { error } = await sbClient
+      .from('shopping_diary_days')
+      .delete()
+      .eq('id', `${pKey}__${date}`);
+    if (error) throw error;
+    return;
+  }
+
+  const payload = buildDayRowPayload(pKey, date);
+  const { error } = await sbClient
+    .from('shopping_diary_days')
+    .upsert(payload, { onConflict: 'id' });
+  if (error) throw error;
+}
+
+async function syncAllDatesToSupabase() {
+  if (!sbClient || !userName) return;
+  const pKey = profileKeyFromName(userName);
+  const allDates = new Set([
+    ...Object.keys(data.days || {}),
+    ...Object.keys(data.meta || {})
+  ]);
+  const rowsToUpsert = [];
+  allDates.forEach(d => {
+    const items = data.days[d] || [];
+    const meta = (data.meta && data.meta[d]) || {};
+    if (items.length > 0 || meta.shop || meta.receipt) {
+      rowsToUpsert.push(buildDayRowPayload(pKey, d));
+    }
+  });
+
+  if (rowsToUpsert.length) {
+    const { error } = await sbClient
+      .from('shopping_diary_days')
+      .upsert(rowsToUpsert, { onConflict: 'id' });
+    if (error) throw error;
+  }
+}
+
+async function syncProfileToSupabase() {
+  if (!sbClient || !userName) return;
+  const hash = localStorage.getItem(AUTH_HASH_KEY) || '';
+  const salt = localStorage.getItem(AUTH_SALT_KEY) || '';
+  if (!hash || !salt) return;
+
+  const pKey = profileKeyFromName(userName);
+  const { error } = await sbClient
+    .from('shopping_profiles')
+    .upsert({
+      profile_key: pKey,
+      user_name: userName,
+      password_hash: hash,
+      salt: salt,
+      checklist_json: checklist || [],
+      monthly_budget: Number(monthlyBudget || 0),
+      updated_at: new Date().toISOString()
+    }, { onConflict: 'profile_key' });
+  if (error) throw error;
+}
+
+async function syncToSupabase(immediate = false, syncAll = false) {
+  if (!sbClient || !userName) return;
+  const run = async () => {
+    setSyncStatus('syncing', 'Syncing...');
+    try {
+      await syncProfileToSupabase();
+      if (syncAll) {
+        await syncAllDatesToSupabase();
+      } else {
+        const targets = dirtyDates.size ? Array.from(dirtyDates) : [currentDate];
+        dirtyDates.clear();
+        for (const d of targets) {
+          await syncDateRowToSupabase(d);
+        }
+      }
+      setSyncStatus('online', 'Synced');
+    } catch (err) {
+      console.error('Supabase date-wise sync error:', err);
+      setSyncStatus('error', 'Sync Failed');
+    }
+  };
+
+  clearTimeout(syncDebounce);
+  if (immediate) await run();
+  else syncDebounce = setTimeout(run, 800);
+}
+
+async function fetchRemoteProfileAndDays(name) {
+  if (!sbClient || !name) return null;
+  const pKey = profileKeyFromName(name);
+
+  const { data: profile, error: pErr } = await sbClient
+    .from('shopping_profiles')
+    .select('*')
+    .eq('profile_key', pKey)
+    .maybeSingle();
+  if (pErr) throw pErr;
+
+  const { data: dayRows, error: dErr } = await sbClient
+    .from('shopping_diary_days')
+    .select('*')
+    .eq('profile_key', pKey)
+    .order('shop_date', { ascending: false });
+  if (dErr) throw dErr;
+
+  if (!profile && (!dayRows || !dayRows.length)) return null;
+  return { profile, dayRows: dayRows || [] };
+}
+
+function applyRemoteBundle(bundle) {
+  if (!bundle) return;
+  const { profile, dayRows } = bundle;
+
+  if (profile) {
+    if (profile.password_hash && profile.salt) {
+      localStorage.setItem(AUTH_HASH_KEY, profile.password_hash);
+      localStorage.setItem(AUTH_SALT_KEY, profile.salt);
+    }
+    if (Array.isArray(profile.checklist_json)) {
+      checklist = profile.checklist_json;
+      localStorage.setItem('nsd_checklist', JSON.stringify(checklist));
+    }
+    if (typeof profile.monthly_budget === 'number') {
+      monthlyBudget = profile.monthly_budget;
+      localStorage.setItem('nsd_budget', String(monthlyBudget));
+    }
+  }
+
+  if (Array.isArray(dayRows)) {
+    const nextDays = {};
+    const nextMeta = {};
+    dayRows.forEach(r => {
+      const d = String(r.shop_date).slice(0, 10);
+      if (Array.isArray(r.items_json) && r.items_json.length) {
+        nextDays[d] = r.items_json;
+      }
+      const m = {};
+      if (r.payment_mode) m.payment = r.payment_mode;
+      if (r.shop_name) m.shop = r.shop_name;
+      if (r.receipt_image) m.receipt = r.receipt_image;
+      if (Object.keys(m).length) nextMeta[d] = m;
+    });
+    data.days = nextDays;
+    data.meta = nextMeta;
+    localStorage.setItem(STORE, JSON.stringify(data));
+  }
+}
+
+// Change Password Button (updates salted hash in `shopping_profiles`)
+$('updatePasswordBtn').addEventListener('click', async () => {
+  const curr = $('currentPassInput').value;
+  const next = $('newPassInput').value;
+  const conf = $('confirmPassInput').value;
+
+  if (!curr || !next || !conf) {
+    toast('Fill all three password fields.');
+    return;
+  }
+  if (next.length < 4) {
+    toast('New password must be at least 4 characters.');
+    return;
+  }
+  if (next !== conf) {
+    toast('New passwords do not match.');
+    return;
+  }
+
+  const storedHash = localStorage.getItem(AUTH_HASH_KEY);
+  const storedSalt = localStorage.getItem(AUTH_SALT_KEY);
+  if (storedHash && storedSalt) {
+    const currCheck = await hashPasswordWithSalt(curr, storedSalt);
+    if (currCheck !== storedHash) {
+      toast('Current password is incorrect.');
+      $('currentPassInput').focus();
+      return;
+    }
+  }
+
+  const newSalt = generateSaltHex(16);
+  const newHash = await hashPasswordWithSalt(next, newSalt);
+  localStorage.setItem(AUTH_SALT_KEY, newSalt);
+  localStorage.setItem(AUTH_HASH_KEY, newHash);
+
+  $('currentPassInput').value = '';
+  $('newPassInput').value = '';
+  $('confirmPassInput').value = '';
+
+  if (sbClient) {
+    setSyncStatus('syncing', 'Updating...');
+    try {
+      await syncProfileToSupabase();
+      setSyncStatus('online', 'Synced');
+      toast('Password updated & synced to Supabase! 🔐');
+    } catch (err) {
+      console.error(err);
+      setSyncStatus('error', 'Sync Failed');
+      toast('Password updated locally, but Supabase sync failed.');
+    }
+  } else {
+    toast('Password updated securely! 🔐');
+  }
+});
+
+$('saveSupabaseBtn').addEventListener('click', async () => {
+  const url = $('sbUrlInput').value.trim();
+  const key = $('sbKeyInput').value.trim();
+  if (!url || !key) {
+    toast('Enter both Supabase URL and Anon Key.');
+    return;
+  }
+  localStorage.setItem(SB_URL_KEY, url);
+  localStorage.setItem(SB_ANON_KEY, key);
+  initSupabaseClient();
+  if (sbClient) {
+    await syncToSupabase(true, true);
+    toast('Connected & synced date-wise data to Supabase!');
+  }
+});
+
+$('pullSupabaseBtn').addEventListener('click', async () => {
+  if (!sbClient) {
+    toast('Connect Supabase first.');
+    return;
+  }
+  setSyncStatus('syncing', 'Pulling...');
+  try {
+    const bundle = await fetchRemoteProfileAndDays(userName);
+    if (!bundle) {
+      setSyncStatus('online', 'Synced');
+      toast('No cloud record found yet for this name.');
+      return;
+    }
+    applyRemoteBundle(bundle);
+    renderNew();
+    renderHistory();
+    renderChecklist();
+    renderReport();
+    setSyncStatus('online', 'Synced');
+    toast('Date-wise data loaded from Supabase!');
+  } catch (err) {
+    console.error(err);
+    setSyncStatus('error', 'Pull Failed');
+    toast('Could not pull from Supabase.');
+  }
+});
+
+$('toggleSqlBtn').addEventListener('click', () => {
+  $('sbSqlBox').classList.toggle('hidden');
+});
+
 // Init
+initSupabaseClient();
 applyLanguage();
 if (userName) $('username').value = userName;
 if (isLoggedIn && userName) {
   showApp();
+  if (sbClient) {
+    fetchRemoteProfileAndDays(userName).then(bundle => {
+      if (bundle) {
+        applyRemoteBundle(bundle);
+        renderNew();
+        renderHistory();
+        renderChecklist();
+        renderReport();
+        setSyncStatus('online', 'Synced');
+      }
+    }).catch(() => setSyncStatus('error', 'Offline'));
+  }
 }
 </script>
 </body>
