@@ -674,6 +674,7 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
             <button type="button" class="primary" id="saveSupabaseBtn">Connect & Sync Now</button>
             <button type="button" class="secondary" id="pullSupabaseBtn">Pull from Cloud</button>
             <button type="button" class="secondary" id="toggleSqlBtn">Show SQL Table Setup</button>
+            <button type="button" class="danger" id="disconnectSupabaseBtn">Disconnect</button>
           </div>
           <div id="sbSqlBox" class="sql-box hidden">-- Run once in Supabase SQL Editor (Date-wise rows):
 create table if not exists shopping_profiles (
@@ -2254,10 +2255,6 @@ $('removeReceiptBtn').addEventListener('click', () => {
 
 
 // ================= CRYPTO (SHA-256 + SALT) & DATE-WISE SUPABASE SYNC =================
-// 👇 Paste your Supabase URL & Anon Key here once so you never have to re-enter them:
-const DEFAULT_SB_URL = 'https://vcigvxhzrslcllaouauv.supabase.co';
-const DEFAULT_SB_ANON_KEY = 'sb_publishable_vrwMGBS8HeK2uQUNKxi52g_OO7jCK3m';
-
 const SB_URL_KEY = 'nsd_sb_url';
 const SB_ANON_KEY = 'nsd_sb_anon';
 const AUTH_HASH_KEY = 'nsd_pass_hash';
@@ -2293,8 +2290,8 @@ async function hashPasswordWithSalt(password, saltHex) {
 }
 
 function initSupabaseClient() {
-  const url = (localStorage.getItem(SB_URL_KEY) || DEFAULT_SB_URL || '').trim();
-  const key = (localStorage.getItem(SB_ANON_KEY) || DEFAULT_SB_ANON_KEY || '').trim();
+  const url = (localStorage.getItem(SB_URL_KEY) || '').trim();
+  const key = (localStorage.getItem(SB_ANON_KEY) || '').trim();
   if ($('sbUrlInput')) $('sbUrlInput').value = url;
   if ($('sbKeyInput')) $('sbKeyInput').value = key;
 
@@ -2585,6 +2582,16 @@ $('pullSupabaseBtn').addEventListener('click', async () => {
     setSyncStatus('error', 'Pull Failed');
     toast('Could not pull from Supabase.');
   }
+});
+
+
+$('disconnectSupabaseBtn').addEventListener('click', () => {
+  localStorage.removeItem(SB_URL_KEY);
+  localStorage.removeItem(SB_ANON_KEY);
+  $('sbUrlInput').value = '';
+  $('sbKeyInput').value = '';
+  initSupabaseClient();
+  toast('Supabase disconnected.');
 });
 
 $('toggleSqlBtn').addEventListener('click', () => {
